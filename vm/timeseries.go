@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 )
 
@@ -10,7 +9,7 @@ type TimeSeries struct {
 	Name       string
 	LabelPairs []LabelPair
 	Timestamps []int64
-	Values     []interface{}
+	Values     []float64
 }
 
 type LabelPair struct {
@@ -34,7 +33,7 @@ func (ts TimeSeries) String() string {
 }
 
 //"{"metric":{"__name__":"cpu_usage_guest","arch":"x64","hostname":"host_19",},"timestamps":[1567296000000,1567296010000],"values":[1567296000000,66]}
-func (ts *TimeSeries) write(buf []byte) []byte{
+func (ts *TimeSeries) write(buf []byte) []byte {
 	pointsCount := len(ts.Timestamps)
 	if pointsCount == 0 {
 		return buf
@@ -65,21 +64,7 @@ func (ts *TimeSeries) write(buf []byte) []byte{
 			buf = append(buf, ',')
 		}
 
-		val := ts.Values[i]
-
-		valFloat, ok := val.(float64)
-		if ok {
-			buf = strconv.AppendFloat(buf, valFloat, 'f', -1, 64)
-			continue
-		}
-
-		valInt, ok := val.(int)
-		if ok {
-			buf = strconv.AppendInt(buf, int64(valInt), 10)
-			continue
-		}
-
-		log.Panicf("unknown type for value: %v", val)
+		buf = strconv.AppendFloat(buf, ts.Values[i], 'f', -1, 64)
 	}
 	buf = append(buf, []byte("]}\n")...)
 

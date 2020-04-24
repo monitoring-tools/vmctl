@@ -95,7 +95,7 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 	}
 	var labels []vm.LabelPair
 	var timestamps []int64
-	var values []interface{}
+	var values []float64
 	for ss.Next() {
 		var name string
 		series := ss.At()
@@ -130,7 +130,7 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 			Name:       name,
 			LabelPairs: append([]vm.LabelPair{}, labels...),
 			Timestamps: append([]int64{}, timestamps...),
-			Values:     append([]interface{}{}, values...),
+			Values:     append([]float64{}, values...),
 		}
 	}
 	return nil

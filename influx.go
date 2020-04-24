@@ -122,6 +122,7 @@ func (ip *influxProcessor) do(s *influx.Series) error {
 		})
 	}
 
+	floats := make([]float64, 0)
 	for {
 		time, values, err := cr.Next()
 		if err != nil {
@@ -134,11 +135,17 @@ func (ip *influxProcessor) do(s *influx.Series) error {
 		if len(time) < 1 {
 			continue
 		}
+
+		floats = floats[:0]
+		for _, val := range values {
+			floats = append(floats, val.(float64))
+		}
+
 		ip.im.Input() <- &vm.TimeSeries{
 			Name:       name,
 			LabelPairs: labels,
 			Timestamps: time,
-			Values:     values,
+			Values:     append([]float64{}, floats...),
 		}
 	}
 }
