@@ -42,7 +42,7 @@ func (pp *prometheusProcessor) run() error {
 	bar := pb.StartNew(int(s.Series))
 	blockReadersCh := make(chan tsdb.BlockReader)
 	errCh := make(chan error, pp.cc)
-	go report(bar)
+	//go report(bar)
 	var wg sync.WaitGroup
 	wg.Add(pp.cc)
 	for i := 0; i < pp.cc; i++ {

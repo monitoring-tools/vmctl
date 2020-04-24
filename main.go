@@ -9,11 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/urfave/cli/v2"
 	"github.com/victoriametrics/vmctl/influx"
 	"github.com/victoriametrics/vmctl/prometheus"
 	"github.com/victoriametrics/vmctl/vm"
-	_ "net/http/pprof"
 )
 
 const version = "0.0.2"
@@ -22,7 +23,7 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":3330", nil))
 	}()
-	
+
 	start := time.Now()
 	app := &cli.App{
 		Name:    "vmctl",
@@ -58,7 +59,7 @@ func main() {
 						Addr:        c.String(vmAddr),
 						User:        c.String(vmUser),
 						Password:    c.String(vmPassword),
-						Concurrency: uint8(c.Int(vmConcurrency)),
+						Concurrency: c.Int(vmConcurrency),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
 					}
@@ -83,7 +84,7 @@ func main() {
 						Addr:        c.String(vmAddr),
 						User:        c.String(vmUser),
 						Password:    c.String(vmPassword),
-						Concurrency: uint8(c.Int(vmConcurrency)),
+						Concurrency: c.Int(vmConcurrency),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
 					}

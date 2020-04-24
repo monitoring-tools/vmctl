@@ -22,7 +22,7 @@ type Config struct {
 	Addr string
 	// Concurrency defines number of worker
 	// performing the import requests concurrently
-	Concurrency uint8
+	Concurrency int
 	// Whether to apply gzip compression
 	Compress bool
 	// AccountID for cluster version
