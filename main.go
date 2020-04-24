@@ -55,6 +55,7 @@ func main() {
 						Concurrency: uint8(c.Int(vmConcurrency)),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
+						OutBufSize:  c.Int(vmOutBufSize),
 					}
 					importer, err := vm.NewImporter(vmCfg)
 					if err != nil {
@@ -80,6 +81,7 @@ func main() {
 						Concurrency: uint8(c.Int(vmConcurrency)),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
+						OutBufSize:  c.Int(vmOutBufSize),
 					}
 					importer, err := vm.NewImporter(vmCfg)
 					if err != nil {

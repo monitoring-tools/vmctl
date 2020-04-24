@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -13,6 +14,7 @@ const (
 	vmConcurrency = "vm-concurrency"
 	vmCompress    = "vm-compress"
 	vmBatchSize   = "vm-batch-size"
+	vmOutBufSize  = "vm-out-buf-size"
 )
 
 var (
@@ -52,6 +54,11 @@ var (
 			Name:  vmBatchSize,
 			Value: 200e3,
 			Usage: "How many datapoints importer collects before sending the import request to VM",
+		},
+		&cli.IntFlag{
+			Name:  vmOutBufSize,
+			Value: 16*1024,
+			Usage: "Size of network output buffer",
 		},
 	}
 )

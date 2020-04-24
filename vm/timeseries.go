@@ -3,6 +3,8 @@ package vm
 import (
 	"fmt"
 	"io"
+	"log"
+	"strconv"
 )
 
 type TimeSeries struct {
@@ -42,11 +44,11 @@ type cWriter struct {
 	err error
 }
 
-func (cw *cWriter) printf(format string, args ...interface{}) {
+func (cw *cWriter) append(p []byte) {
 	if cw.err != nil {
 		return
 	}
-	n, err := fmt.Fprintf(cw.w, format, args...)
+	n, err := cw.w.Write(p)
 	cw.n += n
 	cw.err = err
 }
@@ -58,22 +60,56 @@ func (ts *TimeSeries) write(w io.Writer) (int, error) {
 		return 0, nil
 	}
 
+	buf := make([]byte, 0)
 	cw := &cWriter{w: w}
-	cw.printf(`{"metric":{"__name__":%q`, ts.Name)
+
+	cw.append([]byte(`{"metric":{"__name__":`))
+	buf = FastEscape(buf, ts.Name)
 	if len(ts.LabelPairs) > 0 {
 		for _, lp := range ts.LabelPairs {
-			cw.printf(",%q:%q", lp.Name, lp.Value)
+			buf = append(buf, ',')
+			buf = FastEscape(buf, lp.Name)
+			buf = append(buf, ':')
+			buf = FastEscape(buf, lp.Value)
 		}
 	}
+	cw.append(buf)
 
-	cw.printf(`},"timestamps":[`)
-	for i := 0; i < pointsCount-1; i++ {
-		cw.printf(`%d,`, ts.Timestamps[i])
+	buf = buf[:0]
+	cw.append([]byte(`},"timestamps":[`))
+	for i := 0; i < pointsCount; i++ {
+		if i != 0 {
+			buf = append(buf, ',')
+		}
+		buf = strconv.AppendInt(buf, ts.Timestamps[i], 10)
 	}
-	cw.printf(`%d],"values":[`, ts.Timestamps[pointsCount-1])
-	for i := 0; i < pointsCount-1; i++ {
-		cw.printf(`%v,`, ts.Values[i])
+	cw.append(buf)
+
+	buf = buf[:0]
+	cw.append([]byte(`],"values":[`))
+	for i := 0; i < pointsCount; i++ {
+		if i != 0 {
+			buf = append(buf, ',')
+		}
+
+		val := ts.Values[i]
+
+		valFloat, ok := val.(float64)
+		if ok {
+			buf = strconv.AppendFloat(buf, valFloat, 'f', -1, 64)
+			continue
+		}
+
+		valInt, ok := val.(int)
+		if ok {
+			buf = strconv.AppendInt(buf, int64(valInt), 10)
+			continue
+		}
+
+		log.Panicf("unknown type for value: %v", val)
 	}
-	cw.printf("%v]}\n", ts.Values[pointsCount-1])
+	cw.append(buf)
+	cw.append([]byte("]}\n"))
+
 	return cw.n, cw.err
 }

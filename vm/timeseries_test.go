@@ -43,6 +43,21 @@ func TestTimeSeries_Write(t *testing.T) {
 			exp: `{"metric":{"__name__":"foo","key":"val"},"timestamps":[1577877162200,15778771622400,15778771622600],"values":[1,1.6263,32.123]}`,
 		},
 		{
+			name: "escape",
+			ts: &TimeSeries{
+				Name: "foo \\",
+				LabelPairs: []LabelPair{
+					{
+						Name:  "escaped \\\\\\ key",
+						Value: "val \\",
+					},
+				},
+				Timestamps: []int64{1577877162200},
+				Values:     []interface{}{1},
+			},
+			exp: `{"metric":{"__name__":"foo \\","escaped \\\\\\ key":"val \\"},"timestamps":[1577877162200],"values":[1]}`,
+		},
+		{
 			name: "no datapoints",
 			ts: &TimeSeries{
 				Name: "foo",
