@@ -85,7 +85,7 @@ func (pp *prometheusProcessor) run() error {
 	return nil
 }
 
-func report(bar *pb.ProgressBar)  {
+func report(bar *pb.ProgressBar) {
 	for {
 		val := bar.Current()
 		time.Sleep(time.Second)
@@ -103,6 +103,8 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 	var labels []vm.LabelPair
 	var timestamps []int64
 	var values []float64
+	batch := make([]*vm.TimeSeries, 0)
+	dataPoints := 0
 	for ss.Next() {
 		var name string
 		series := ss.At()
@@ -133,13 +135,23 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 		if it.Err() != nil {
 			return ss.Err()
 		}
-		pp.im.Input() <- &vm.TimeSeries{
+
+		bar.Increment()
+
+		ts := &vm.TimeSeries{
 			Name:       name,
 			LabelPairs: append([]vm.LabelPair{}, labels...),
 			Timestamps: append([]int64{}, timestamps...),
 			Values:     append([]float64{}, values...),
 		}
-		bar.Increment()
+		batch = append(batch, )
+		dataPoints += len(ts.Values)
+		if dataPoints < 1000000 {
+			continue
+		}
+
+		pp.im.Input() <- batch
+		batch = make([]*vm.TimeSeries, 0)
 	}
 	return nil
 }

@@ -141,11 +141,11 @@ func (ip *influxProcessor) do(s *influx.Series) error {
 			floats = append(floats, val.(float64))
 		}
 
-		ip.im.Input() <- &vm.TimeSeries{
+		ip.im.Input() <- append([]*vm.TimeSeries{}, &vm.TimeSeries{
 			Name:       name,
 			LabelPairs: labels,
 			Timestamps: time,
 			Values:     append([]float64{}, floats...),
-		}
+		})
 	}
 }

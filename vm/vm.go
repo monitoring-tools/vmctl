@@ -48,7 +48,7 @@ type Importer struct {
 	password   string
 
 	close  chan struct{}
-	input  chan *TimeSeries
+	input  chan []*TimeSeries
 	errors chan *ImportError
 
 	wg   sync.WaitGroup
@@ -83,7 +83,7 @@ func NewImporter(cfg Config) (*Importer, error) {
 		user:       cfg.User,
 		password:   cfg.Password,
 		close:      make(chan struct{}),
-		input:      make(chan *TimeSeries, cfg.Concurrency*4),
+		input:      make(chan []*TimeSeries, cfg.Concurrency*4),
 		errors:     make(chan *ImportError, cfg.Concurrency),
 	}
 	if err := im.Ping(); err != nil {
@@ -120,7 +120,7 @@ func (im *Importer) Errors() chan *ImportError { return im.errors }
 
 // Input returns a channel for sending timeseries
 // that need to be imported
-func (im *Importer) Input() chan<- *TimeSeries { return im.input }
+func (im *Importer) Input() chan<- []*TimeSeries { return im.input }
 
 // Close sends signal to all goroutines to exit
 // and waits until they are finished
@@ -133,7 +133,6 @@ func (im *Importer) Close() {
 
 func (im *Importer) startWorker(batchSize int) {
 	var batch []*TimeSeries
-	var dataPoints int
 	var err error
 	buf := make([]byte, 0)
 	waitForBatch := time.Now()
@@ -148,12 +147,7 @@ func (im *Importer) startWorker(batchSize int) {
 				}
 			}
 			return
-		case ts := <-im.input:
-			batch = append(batch, ts)
-			dataPoints += len(ts.Values)
-			if dataPoints < batchSize {
-				continue
-			}
+		case batch := <-im.input:
 			im.s.Lock()
 			im.s.idleDuration += time.Since(waitForBatch)
 			im.s.Unlock()
@@ -164,11 +158,7 @@ func (im *Importer) startWorker(batchSize int) {
 					Batch: batch,
 					Err:   err,
 				}
-				// make a new batch, since old one was referenced as err
-				batch = make([]*TimeSeries, len(batch))
 			}
-			batch = batch[:0]
-			dataPoints = 0
 			waitForBatch = time.Now()
 		}
 	}
