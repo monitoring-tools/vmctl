@@ -144,12 +144,13 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 			Timestamps: append([]int64{}, timestamps...),
 			Values:     append([]float64{}, values...),
 		}
-		batch = append(batch, )
+		batch = append(batch, ts)
 		dataPoints += len(ts.Values)
 		if dataPoints < 1000000 {
 			continue
 		}
 
+		dataPoints = 0
 		pp.im.Input() <- batch
 		batch = make([]*vm.TimeSeries, 0)
 	}
