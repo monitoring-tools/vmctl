@@ -176,7 +176,7 @@ func (im *Importer) startWorker(batchSize int) {
 
 const (
 	// TODO: make configurable
-	backoffRetries     = 5
+	backoffRetries     = 1
 	backoffFactor      = 1.7
 	backoffMinDuration = time.Second
 )
