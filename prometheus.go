@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/cheggaaa/pb/v3"
 	"github.com/prometheus/prometheus/tsdb"
@@ -26,7 +27,7 @@ type prometheusProcessor struct {
 }
 
 func (pp *prometheusProcessor) run() error {
-	blocks, err := pp.cl.Explore()
+	blocks, s, err := pp.cl.Explore()
 	if err != nil {
 		return fmt.Errorf("explore failed: %s", err)
 	}
@@ -38,21 +39,20 @@ func (pp *prometheusProcessor) run() error {
 		return nil
 	}
 
-	bar := pb.StartNew(len(blocks))
+	bar := pb.StartNew(int(s.Series))
 	blockReadersCh := make(chan tsdb.BlockReader)
 	errCh := make(chan error, pp.cc)
-
+	go report(bar)
 	var wg sync.WaitGroup
 	wg.Add(pp.cc)
 	for i := 0; i < pp.cc; i++ {
 		go func() {
 			defer wg.Done()
 			for br := range blockReadersCh {
-				if err := pp.do(br); err != nil {
+				if err := pp.do(bar, br); err != nil {
 					errCh <- fmt.Errorf("read failed for block %q: %s", br.Meta().ULID, err)
 					return
 				}
-				bar.Increment()
 			}
 		}()
 	}
@@ -85,7 +85,14 @@ func (pp *prometheusProcessor) run() error {
 	return nil
 }
 
-func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
+func report(bar *pb.ProgressBar)  {
+	for {
+		val := bar.Current()
+		time.Sleep(time.Second)
+		log.Printf("speed: %0.2fKTS/s", float64(bar.Current()-val)/1000)
+	}
+}
+func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error {
 	ss, err := pp.cl.Read(b)
 	if err != nil {
 		return fmt.Errorf("failed to read block: %s", err)
@@ -132,6 +139,7 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 			Timestamps: append([]int64{}, timestamps...),
 			Values:     append([]float64{}, values...),
 		}
+		bar.Increment()
 	}
 	return nil
 }

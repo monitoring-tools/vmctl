@@ -75,10 +75,10 @@ func NewClient(cfg Config) (*Client, error) {
 // Explore does initial filtering by time-range
 // for snapshot blocks but does not take into account
 // label filters.
-func (c *Client) Explore() ([]tsdb.BlockReader, error) {
+func (c *Client) Explore() ([]tsdb.BlockReader, *Stats, error) {
 	blocks, err := c.Blocks()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch blocks: %s", err)
+		return nil, nil, fmt.Errorf("failed to fetch blocks: %s", err)
 	}
 
 	s := &Stats{}
@@ -99,7 +99,7 @@ func (c *Client) Explore() ([]tsdb.BlockReader, error) {
 		s.Series += meta.Stats.NumSeries
 	}
 	fmt.Println(s)
-	return blocks, nil
+	return blocks, s, nil
 }
 
 // Read reads the given BlockReader according to configured
