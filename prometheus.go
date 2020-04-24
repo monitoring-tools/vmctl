@@ -139,7 +139,7 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 		batch = append(batch, ts)
 
 		dataPoints += len(ts.Values)
-		if dataPoints < 200000 {
+		if dataPoints < 10000000 {
 			continue
 		}
 
