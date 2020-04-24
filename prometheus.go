@@ -100,20 +100,22 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 	if ss.Err() != nil {
 		return fmt.Errorf("unexpected series set error: %s", err)
 	}
+	var labels []vm.LabelPair
+	var timestamps []int64
+	var values []float64
 	batch := make([]*vm.TimeSeries, 0)
 	dataPoints := 0
 	for ss.Next() {
 		var name string
 		series := ss.At()
 
-		ts := vm.TSPool.Get().(*vm.TimeSeries)
-		ts.LabelPairs = ts.LabelPairs[:0]
+		labels = labels[:0]
 		for _, label := range series.Labels() {
 			if label.Name == "__name__" {
 				name = label.Value
 				continue
 			}
-			ts.LabelPairs = append(ts.LabelPairs, vm.LabelPair{
+			labels = append(labels, vm.LabelPair{
 				Name:  label.Name,
 				Value: label.Value,
 			})
@@ -121,14 +123,14 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 		if name == "" {
 			return fmt.Errorf("failed to find `__name__` label in labelset for block %v", b.Meta().ULID)
 		}
-		ts.Name = name
-		ts.Timestamps = ts.Timestamps[:0]
-		ts.Values = ts.Values[:0]
+
+		timestamps = timestamps[:0]
+		values = values[:0]
 		it := series.Iterator()
 		for it.Next() {
 			t, v := it.At()
-			ts.Timestamps = append(ts.Timestamps, t)
-			ts.Values = append(ts.Values, v)
+			timestamps = append(timestamps, t)
+			values = append(values, v)
 		}
 		if it.Err() != nil {
 			return ss.Err()
@@ -136,8 +138,13 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 
 		bar.Increment()
 
+		ts := vm.TSPool.Get().(*vm.TimeSeries)
+		ts.Name = name
+		ts.LabelPairs = append(ts.LabelPairs[:0], labels...)
+		ts.Timestamps = append(ts.Timestamps[:0], timestamps...)
+		ts.Values = append(ts.Values[:0], values...)
+		
 		batch = append(batch, ts)
-
 		dataPoints += len(ts.Values)
 		if dataPoints < 1000000 {
 			continue
