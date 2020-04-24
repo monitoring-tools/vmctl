@@ -93,11 +93,14 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 	if ss.Err() != nil {
 		return fmt.Errorf("unexpected series set error: %s", err)
 	}
+	var labels []vm.LabelPair
+	var timestamps []int64
+	var values []interface{}
 	for ss.Next() {
 		var name string
-		var labels []vm.LabelPair
 		series := ss.At()
 
+		labels = labels[:0]
 		for _, label := range series.Labels() {
 			if label.Name == "__name__" {
 				name = label.Value
@@ -112,8 +115,8 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 			return fmt.Errorf("failed to find `__name__` label in labelset for block %v", b.Meta().ULID)
 		}
 
-		var timestamps []int64
-		var values []interface{}
+		timestamps = timestamps[:0]
+		values = values[:0]
 		it := series.Iterator()
 		for it.Next() {
 			t, v := it.At()
@@ -125,9 +128,9 @@ func (pp *prometheusProcessor) do(b tsdb.BlockReader) error {
 		}
 		pp.im.Input() <- &vm.TimeSeries{
 			Name:       name,
-			LabelPairs: labels,
-			Timestamps: timestamps,
-			Values:     values,
+			LabelPairs: append([]vm.LabelPair{}, labels...),
+			Timestamps: append([]int64{}, timestamps...),
+			Values:     append([]interface{}{}, values...),
 		}
 	}
 	return nil

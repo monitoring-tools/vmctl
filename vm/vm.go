@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"bufio"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -32,8 +31,6 @@ type Config struct {
 	// BatchSize defines how many datapoints
 	// importer collects before sending the import request
 	BatchSize int
-	// OutBufSize defines the size of the output buffer
-	OutBufSize int
 	// User name for basic auth
 	User string
 	// Password for basic auth
@@ -47,7 +44,6 @@ type Importer struct {
 	addr       string
 	importPath string
 	compress   bool
-	outBufSize int
 	user       string
 	password   string
 
@@ -82,7 +78,6 @@ func NewImporter(cfg Config) (*Importer, error) {
 
 	im := &Importer{
 		addr:       addr,
-		outBufSize: cfg.OutBufSize,
 		importPath: importPath,
 		compress:   cfg.Compress,
 		user:       cfg.User,
@@ -99,15 +94,11 @@ func NewImporter(cfg Config) (*Importer, error) {
 		cfg.BatchSize = 1e5
 	}
 
-	if cfg.OutBufSize < 16*1024 {
-		cfg.OutBufSize = 16 * 1024
-	}
-
 	im.wg.Add(int(cfg.Concurrency))
 	for i := 0; i < int(cfg.Concurrency); i++ {
 		go func() {
 			defer im.wg.Done()
-			im.startWorker(cfg.BatchSize, cfg.OutBufSize)
+			im.startWorker(cfg.BatchSize)
 		}()
 	}
 
@@ -140,15 +131,17 @@ func (im *Importer) Close() {
 	})
 }
 
-func (im *Importer) startWorker(batchSize int, outBufSize int) {
+func (im *Importer) startWorker(batchSize int) {
 	var batch []*TimeSeries
 	var dataPoints int
+	var err error
+	buf := make([]byte, 0)
 	waitForBatch := time.Now()
-	bw := bufio.NewWriterSize(nil, outBufSize)
 	for {
 		select {
 		case <-im.close:
-			if err := im.Import(bw, batch); err != nil {
+			buf, err = im.Import(buf, batch)
+			if err != nil {
 				im.errors <- &ImportError{
 					Batch: batch,
 					Err:   err,
@@ -165,7 +158,8 @@ func (im *Importer) startWorker(batchSize int, outBufSize int) {
 			im.s.idleDuration += time.Since(waitForBatch)
 			im.s.Unlock()
 
-			if err := im.flush(bw, batch); err != nil {
+			buf, err = im.flush(buf, batch)
+			if err != nil {
 				im.errors <- &ImportError{
 					Batch: batch,
 					Err:   err,
@@ -187,15 +181,15 @@ const (
 	backoffMinDuration = time.Second
 )
 
-func (im *Importer) flush(bw *bufio.Writer, b []*TimeSeries) error {
+func (im *Importer) flush(buf []byte, b []*TimeSeries) ([]byte, error) {
 	var err error
 	for i := 0; i < backoffRetries; i++ {
-		err = im.Import(bw, b)
+		buf, err = im.Import(buf, b)
 		if err == nil {
-			return nil
+			return buf, nil
 		}
 		if errors.Is(err, ErrBadRequest) {
-			return err // fail fast if not recoverable
+			return buf, err // fail fast if not recoverable
 		}
 		im.s.Lock()
 		im.s.retries++
@@ -203,7 +197,7 @@ func (im *Importer) flush(bw *bufio.Writer, b []*TimeSeries) error {
 		backoff := float64(backoffMinDuration) * math.Pow(backoffFactor, float64(i))
 		time.Sleep(time.Duration(backoff))
 	}
-	return fmt.Errorf("import failed with %d retries: %s", backoffRetries, err)
+	return buf, fmt.Errorf("import failed with %d retries: %s", backoffRetries, err)
 }
 
 func (im *Importer) Ping() error {
@@ -225,9 +219,9 @@ func (im *Importer) Ping() error {
 	return nil
 }
 
-func (im *Importer) Import(bw *bufio.Writer, tsBatch []*TimeSeries) error {
+func (im *Importer) Import(buf []byte, tsBatch []*TimeSeries) ([]byte, error) {
 	if len(tsBatch) < 1 {
-		return nil
+		return buf, nil
 	}
 
 	start := time.Now()
@@ -235,7 +229,7 @@ func (im *Importer) Import(bw *bufio.Writer, tsBatch []*TimeSeries) error {
 	pr, pw := io.Pipe()
 	req, err := http.NewRequest("POST", im.importPath, pr)
 	if err != nil {
-		return fmt.Errorf("cannot create request to %q: %s", im.addr, err)
+		return buf, fmt.Errorf("cannot create request to %q: %s", im.addr, err)
 	}
 	if im.user != "" {
 		req.SetBasicAuth(im.user, im.password)
@@ -254,38 +248,34 @@ func (im *Importer) Import(bw *bufio.Writer, tsBatch []*TimeSeries) error {
 	if im.compress {
 		zw, err := gzip.NewWriterLevel(pw, 1)
 		if err != nil {
-			return fmt.Errorf("unexpected error when creating gzip writer: %s", err)
+			return buf, fmt.Errorf("unexpected error when creating gzip writer: %s", err)
 		}
 		w = zw
 	}
 
-	bw.Reset(w)
-
 	var totalDP, totalBytes int
 	for _, ts := range tsBatch {
-		n, err := ts.write(bw)
+		buf = ts.write(buf[:0])
+		n, err := w.Write(buf)
 		if err != nil {
-			return fmt.Errorf("write err: %w", err)
+			return buf, fmt.Errorf("write err: %w", err)
 		}
 		totalBytes += n
 		totalDP += len(ts.Values)
 	}
-	if err := bw.Flush(); err != nil {
-		return err
-	}
 	if im.compress {
 		err := w.(*gzip.Writer).Close()
 		if err != nil {
-			return err
+			return buf, err
 		}
 	}
 	if err := pw.Close(); err != nil {
-		return err
+		return buf, err
 	}
 
 	requestErr := <-errCh
 	if requestErr != nil {
-		return fmt.Errorf("import request error for %q: %w", im.addr, requestErr)
+		return buf, fmt.Errorf("import request error for %q: %w", im.addr, requestErr)
 	}
 
 	im.s.Lock()
@@ -295,7 +285,7 @@ func (im *Importer) Import(bw *bufio.Writer, tsBatch []*TimeSeries) error {
 	im.s.importDuration += time.Since(start)
 	im.s.Unlock()
 
-	return nil
+	return buf, nil
 }
 
 var ErrBadRequest = errors.New("bad request")

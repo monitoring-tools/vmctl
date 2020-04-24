@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 )
@@ -74,12 +73,9 @@ func TestTimeSeries_Write(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			b := &bytes.Buffer{}
-			_, err := tc.ts.write(b)
-			if err != nil {
-				t.Error(err)
-			}
-			got := strings.TrimSpace(b.String())
+			b := make([]byte, 0)
+			b = tc.ts.write(b)
+			got := strings.TrimSpace(string(b))
 			if got != tc.exp {
 				t.Fatalf("\ngot:  %q\nwant: %q", got, tc.exp)
 			}

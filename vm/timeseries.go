@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"strconv"
 )
@@ -34,36 +33,14 @@ func (ts TimeSeries) String() string {
 	return fmt.Sprintf("%s{%s}", s, labels)
 }
 
-// cWriter used to avoid error checking
-// while doing Write calls.
-// cWriter caches the first error if any
-// and discards all sequential write calls
-type cWriter struct {
-	w   io.Writer
-	n   int
-	err error
-}
-
-func (cw *cWriter) append(p []byte) {
-	if cw.err != nil {
-		return
-	}
-	n, err := cw.w.Write(p)
-	cw.n += n
-	cw.err = err
-}
-
 //"{"metric":{"__name__":"cpu_usage_guest","arch":"x64","hostname":"host_19",},"timestamps":[1567296000000,1567296010000],"values":[1567296000000,66]}
-func (ts *TimeSeries) write(w io.Writer) (int, error) {
+func (ts *TimeSeries) write(buf []byte) []byte{
 	pointsCount := len(ts.Timestamps)
 	if pointsCount == 0 {
-		return 0, nil
+		return buf
 	}
 
-	buf := make([]byte, 0)
-	cw := &cWriter{w: w}
-
-	cw.append([]byte(`{"metric":{"__name__":`))
+	buf = append(buf, []byte(`{"metric":{"__name__":`)...)
 	buf = FastEscape(buf, ts.Name)
 	if len(ts.LabelPairs) > 0 {
 		for _, lp := range ts.LabelPairs {
@@ -73,20 +50,16 @@ func (ts *TimeSeries) write(w io.Writer) (int, error) {
 			buf = FastEscape(buf, lp.Value)
 		}
 	}
-	cw.append(buf)
 
-	buf = buf[:0]
-	cw.append([]byte(`},"timestamps":[`))
+	buf = append(buf, []byte(`},"timestamps":[`)...)
 	for i := 0; i < pointsCount; i++ {
 		if i != 0 {
 			buf = append(buf, ',')
 		}
 		buf = strconv.AppendInt(buf, ts.Timestamps[i], 10)
 	}
-	cw.append(buf)
 
-	buf = buf[:0]
-	cw.append([]byte(`],"values":[`))
+	buf = append(buf, []byte(`],"values":[`)...)
 	for i := 0; i < pointsCount; i++ {
 		if i != 0 {
 			buf = append(buf, ',')
@@ -108,8 +81,7 @@ func (ts *TimeSeries) write(w io.Writer) (int, error) {
 
 		log.Panicf("unknown type for value: %v", val)
 	}
-	cw.append(buf)
-	cw.append([]byte("]}\n"))
+	buf = append(buf, []byte("]}\n")...)
 
-	return cw.n, cw.err
+	return buf
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,11 +13,16 @@ import (
 	"github.com/victoriametrics/vmctl/influx"
 	"github.com/victoriametrics/vmctl/prometheus"
 	"github.com/victoriametrics/vmctl/vm"
+	_ "net/http/pprof"
 )
 
 const version = "0.0.2"
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe(":3330", nil))
+	}()
+	
 	start := time.Now()
 	app := &cli.App{
 		Name:    "vmctl",
@@ -55,7 +61,6 @@ func main() {
 						Concurrency: uint8(c.Int(vmConcurrency)),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
-						OutBufSize:  c.Int(vmOutBufSize),
 					}
 					importer, err := vm.NewImporter(vmCfg)
 					if err != nil {
@@ -81,7 +86,6 @@ func main() {
 						Concurrency: uint8(c.Int(vmConcurrency)),
 						Compress:    c.Bool(vmCompress),
 						AccountID:   c.Int(vmAccountID),
-						OutBufSize:  c.Int(vmOutBufSize),
 					}
 					importer, err := vm.NewImporter(vmCfg)
 					if err != nil {
