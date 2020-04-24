@@ -138,13 +138,14 @@ func (pp *prometheusProcessor) do(bar *pb.ProgressBar, b tsdb.BlockReader) error
 
 		bar.Increment()
 
-		ts := &vm.TimeSeries{
-			Name:       name,
-			LabelPairs: append([]vm.LabelPair{}, labels...),
-			Timestamps: append([]int64{}, timestamps...),
-			Values:     append([]float64{}, values...),
-		}
+		ts := vm.TSPool.Get().(*vm.TimeSeries)
+		ts.Name = name
+		ts.LabelPairs = append(ts.LabelPairs[:0], labels...)
+		ts.Timestamps = append(ts.Timestamps[:0], timestamps...)
+		ts.Values = append(ts.Values[:0], values...)
+		
 		batch = append(batch, ts)
+		
 		dataPoints += len(ts.Values)
 		if dataPoints < 1000000 {
 			continue

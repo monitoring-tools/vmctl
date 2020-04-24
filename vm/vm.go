@@ -267,6 +267,10 @@ func (im *Importer) Import(buf []byte, tsBatch []*TimeSeries) ([]byte, error) {
 	if requestErr != nil {
 		return buf, fmt.Errorf("import request error for %q: %w", im.addr, requestErr)
 	}
+	
+	for _, ts := range tsBatch {
+		TSPool.Put(ts)
+	}
 
 	im.s.Lock()
 	im.s.bytes += uint64(totalBytes)
